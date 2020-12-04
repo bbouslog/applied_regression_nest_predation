@@ -1,0 +1,137 @@
+---
+title: "SDS358_Project_EDA"
+author: "Brent Bouslog"
+date: "10/15/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+knitr::opts_chunk$set(echo = TRUE)
+require("knitr")
+opts_knit$set(root.dir = "~/RStudio")
+```
+
+## Visualizing the Data Table
+
+```{r show_orig, layout="l-body-outset"}
+mydata <- read.csv("nest_predation_dataset.csv")
+kable(head(mydata))
+```
+
+## Visualizing Clean Data Table
+
+```{r show, layout="l-body-outset"}
+mydata_clean <- mydata[c("Lat","Long","IncubationPeriod.days.", "NestlingPeriod.days.", "ClutchSize", "demelevation", "temptrop2", "PercentageSuccessfulNests")]
+mydata_clean <- drop_na(mydata_clean)
+kable(head(mydata_clean))
+```
+
+## Univariate Statistics
+
+```{r stats}
+summary.extended <- mydata_clean %>%
+  select(Lat,Long,IncubationPeriod.days.,NestlingPeriod.days.,ClutchSize,demelevation,PercentageSuccessfulNests) %>%
+  psych::describe(fast = TRUE) %>%
+  as_tibble(rownames="rowname") %>%
+  print(summary.extended)
+```
+
+## Visualization of Latitue
+
+```{r lat}
+ggplot(mydata_clean, aes(Lat)) +
+  geom_histogram(fill="lightblue", color="blue", aes(y = stat(count) / sum(count))) +
+  labs(title ="Histrogram of Latitude Observations", x = "Latitude (in degrees)", y = "Relative frequency") +
+  theme_classic()
+```
+
+From this graph we can tell that the distribution of latitudes is bi-modal and symmetric with many observations falling around 0 degrees and 40 degrees. This puts many of our observations very close to the equator.
+
+## Visualization of Longitude
+
+```{r long}
+ggplot(mydata_clean, aes(Long)) +
+  geom_histogram(fill="lightblue", color="blue", aes(y = stat(count) / sum(count))) +
+  labs(title ="Histrogram of Longitude Observations", x = "Longitude (in degrees)", y = "Relative frequency") +
+  theme_classic()
+```
+
+From this graph we can tell that the distribution of longitudes is unimodal and symmetric with most observations falling around -80 degrees. Due to the fact that none of our observations had longitudes greater than 0 we can say that all of our observations are in the western hemisphere.
+
+## Visualization of Latitude vs. Longitude
+
+```{r lat_log}
+ggplot(mydata_clean, aes(x=Long, y=Lat)) + 
+  geom_point() +
+  labs(title ="Latitude vs. Longitude", x = "Longitude (in degrees)", y = "Latitude (in degrees)") +
+  theme_classic()
+```
+
+This graph emulates a map of the locations of all the nests. From this graph we can tell that most nests are from North, Central, and South America.
+
+## Visualization of Incubation Period (days)
+
+```{r incubation}
+ggplot(mydata_clean, aes(IncubationPeriod.days.)) +
+  geom_histogram(fill="lightblue", color="blue", aes(y = stat(count) / sum(count))) +
+  labs(title ="Histrogram of Incubation Lengths", x = "Incubation Length (in days)", y = "Relative frequency") +
+  theme_classic()
+```
+
+From this graph we can tell that the distribution of incubation lengths is unimodal and skewed right with many observations falling between 10 and 15 days with a few observations of incubation lengths greater than 25 days.
+
+## Visualization of Nestling Period (days)
+
+```{r nestling}
+ggplot(mydata_clean, aes(NestlingPeriod.days.)) +
+  geom_histogram(fill="lightblue", color="blue", aes(y = stat(count) / sum(count))) +
+  labs(title ="Histrogram of Nestling Lengths", x = "Nestling Length (in days)", y = "Relative frequency") +
+  theme_classic()
+```
+
+From this graph we can tell that the distribution of Nestling Lengths is unimodal and skewed right with many observations falling around 10 days with a few observations greater than 30 days.
+
+## Visualization of Clutch Size
+
+```{r clutch}
+ggplot(mydata_clean, aes(ClutchSize)) +
+  geom_histogram(fill="lightblue", color="blue", aes(y = stat(count) / sum(count))) +
+  labs(title ="Histrogram of Clutch Sizes", x = "Clutch Size (in number of eggs)", y = "Relative frequency") +
+  theme_classic()
+```
+
+From this graph we can tell that clutch size is unimodal and skewed right with most clutches having close to 2 eggs with a few having as many as 6 eggs.
+
+## Visualization of Altitude (m)
+
+```{r alt}
+ggplot(mydata_clean, aes(demelevation)) +
+  geom_histogram(fill="lightblue", color="blue", aes(y = stat(count) / sum(count))) +
+  labs(title ="Histrogram of Nest Altitude", x = "Nest Altitude (in m above sea level)", y = "Relative frequency") +
+  theme_classic()
+```
+
+From this graph we can tell that the distribution of nest altitudes is unimodal and skewed right with many altitudes being very close to sea level with only a few altitudes in the mountains around 2000-3000 m about sea level.
+
+## Visualization of Habitat Type
+
+```{r temp}
+ggplot(mydata_clean, aes(temptrop2)) + 
+  geom_bar(aes(y = stat(count) / sum(count))) +
+  labs(title ="Bar Graph of Habitat Types", x = "Habitat Type", y = "Relative frequency") +
+  theme_classic()
+```
+
+From this graph we can tell that the majority of the nests come from northern temperate locations, followed closely behind by tropical locations, with only a few nests coming from southern temperate locations.
+
+## Visualization of Nest Success Rate
+
+```{r success}
+ggplot(mydata_clean, aes(PercentageSuccessfulNests)) +
+  geom_histogram(fill="lightblue", color="blue", aes(y = stat(count) / sum(count))) +
+  labs(title ="Histrogram of Percentage of Successful Nests", x = "Percentage of Successful Nests", y = "Relative frequency") +
+  theme_classic()
+```
+
+From this graph we can tell that the success rate of nests is unimodal and symmetric with many success rates falling around the 50% mark with only a few close to 0% and 100%.

@@ -1,0 +1,145 @@
+---
+title: "SDS358_Project_RP3"
+author: "Brent Bouslog"
+date: "11/19/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(car)
+library(psych)
+library(leaps)
+knitr::opts_chunk$set(echo = TRUE)
+require("knitr")
+opts_knit$set(root.dir = "~/RStudio")
+```
+
+## Importing Data
+
+```{r show_orig, layout="l-body-outset"}
+mydata <- read.csv("nest_predation_dataset.csv")
+```
+
+## Data Preprocessing
+
+```{r show, layout="l-body-outset"}
+data <- mydata[c("Lat","Long","IncubationPeriod.days.", "NestlingPeriod.days.", "ClutchSize", "demelevation", "temptrop2", "PercentageSuccessfulNests")]
+data <- drop_na(data)
+kable(head(data))
+```
+
+## Visualization of Response
+
+```{r success}
+ggplot(data, aes(PercentageSuccessfulNests)) +
+  geom_histogram(fill="lightblue", color="blue", aes(y = stat(count) / sum(count))) +
+  labs(title ="Histrogram of Percentage of Successful Nests", x = "Percentage of Successful Nests", y = "Relative frequency") +
+  theme_classic()
+```
+
+Distribution of Percentage of Successful Nests (Response) looks approximately normal. Therefore, we do not seem to need any transformations for our response variable.
+
+## Visualization of Relationships btw Predictors and btw Predictors and Response
+
+```{r scatterplot}
+# A fancy scatterplot matrix
+pairs.panels(data[c("Lat","Long","IncubationPeriod.days.", "NestlingPeriod.days.", "ClutchSize", "demelevation", "temptrop2", "PercentageSuccessfulNests")], 
+             method ="pearson", # correlation method
+             hist.col ="#00AFBB", # color of histogram
+             smooth =FALSE, density =FALSE, ellipses =FALSE)
+```
+
+## Visualization of Interaction with Habitat
+
+```{r interaction}
+ggplot(data, aes(x=Lat, y=PercentageSuccessfulNests, color=temptrop2)) +
+  geom_point() +geom_smooth(method=lm, se=FALSE, fullrange=TRUE) +
+  labs(title ="Latitude vs. Percentage Successful Nests", x ="Latitude", y ="Percentage Successful Nests")
+
+ggplot(data, aes(x=Long, y=PercentageSuccessfulNests, color=temptrop2)) +
+  geom_point() +geom_smooth(method=lm, se=FALSE, fullrange=TRUE) +
+  labs(title ="Longitude vs. Percentage Successful Nests", x ="Longitude", y ="Percentage Successful Nests")
+
+ggplot(data, aes(x=IncubationPeriod.days., y=PercentageSuccessfulNests, color=temptrop2)) +
+  geom_point() +geom_smooth(method=lm, se=FALSE, fullrange=TRUE) +
+  labs(title ="Incubation Period vs. Percentage Successful Nests", x ="Incubation Period", y ="Percentage Successful Nests")
+
+ggplot(data, aes(x=NestlingPeriod.days., y=PercentageSuccessfulNests, color=temptrop2)) +
+  geom_point() +geom_smooth(method=lm, se=FALSE, fullrange=TRUE) +
+  labs(title ="Nestling Period vs. Percentage Successful Nests", x ="Nestling Period", y ="Percentage Successful Nests")
+
+ggplot(data, aes(x=ClutchSize, y=PercentageSuccessfulNests, color=temptrop2)) +
+  geom_point() +geom_smooth(method=lm, se=FALSE, fullrange=TRUE) +
+  labs(title ="Clutch Size vs. Percentage Successful Nests", x ="Clutch Size", y ="Percentage Successful Nests")
+
+ggplot(data, aes(x=demelevation, y=PercentageSuccessfulNests, color=temptrop2)) +
+  geom_point() +geom_smooth(method=lm, se=FALSE, fullrange=TRUE) +
+  labs(title ="Elevation vs. Percentage Successful Nests", x ="Elevation", y ="Percentage Successful Nests")
+```
+
+These graphs show us that we need interaction terms with almost every variable and the type of habitat it comes from because the response regression equation seems to vary greatly across all habitats for almost every predictor.
+
+In addition, none of these graphs seem to show that non-linear regression or transformations would be required. None of them seem to show a discernable pattern that would suggest they are needed. I will definitely try non-linear models, but I do not think they are entirely necessary.
+
+## Best Subset Regression: Multiple Linear Regression
+
+```{r dummy}
+data$ntemp <-ifelse(data$temptrop2 == 'ntemp', 1, 0)
+data$stemp <-ifelse(data$temptrop2 == 'stemp', 1, 0)
+```
+
+```{r best_subsets}
+# Find the best model for each number of predictors (with 8 predictors maximum)
+models <-regsubsets(PercentageSuccessfulNests ~Lat +Long +IncubationPeriod.days. +NestlingPeriod.days. +ClutchSize +demelevation +ntemp +stemp, data, nvmax =8)
+models.sum <-summary(models)
+
+# Create four plots within a 2x2 frame to compare the different criteria
+par(mfrow =c(2,2))
+  # SSE
+  plot(models.sum$rss, xlab ="Number of predictors", ylab ="SSE", type ="l")
+  
+  # R2
+  plot(models.sum$adjr2, xlab ="Number of predictors", ylab ="Adjusted RSq", type ="l")
+  
+  # Mallow's Cp
+  plot(models.sum$cp, xlab ="Number of predictors", ylab ="Cp", type ="l")
+  
+  # BIC
+  plot(models.sum$bic, xlab ="Number of predictors", ylab ="BIC", type ="l")
+```
+
+It seems that 5 predictors is the best number of predictors for the base-case linear regression without any interaction terms.
+
+## Best Subsets Regression: Multiple Linear Regression with Interaction Terms
+
+```{r mlr_interaction}
+# Calculate the squared predictor variables to include in the model and the interaction term:
+data <-data %>% mutate(Lat.ntemp = Lat*ntemp, Lat.stemp = Lat*stemp, Long.ntemp = Long*ntemp, Long.stemp = Long*stemp,
+                       Incubate.ntemp = IncubationPeriod.days.*ntemp, Incubate.stemp = IncubationPeriod.days.*stemp, 
+                       Nestle.ntemp = NestlingPeriod.days.*ntemp, Nestle.stemp = NestlingPeriod.days.*stemp,
+                       ClutchSize.ntemp = ClutchSize*ntemp, ClutchSize.stemp = ClutchSize*stemp, 
+                       Elev.ntemp = demelevation*ntemp, Elev.stemp = demelevation*stemp)
+```
+
+```{r best_subsets2}
+# Find the best model for each number of predictors (with 8 predictors maximum)
+models <-regsubsets(PercentageSuccessfulNests ~Lat +Lat.ntemp +Lat.stemp +Long +Long.ntemp +Long.stemp +IncubationPeriod.days. +Incubate.ntemp +Incubate.stemp +NestlingPeriod.days. +Nestle.ntemp +Nestle.stemp +ClutchSize +ClutchSize.ntemp +ClutchSize.stemp +demelevation +Elev.ntemp +Elev.stemp +ntemp +stemp, data, nvmax =20)
+models.sum <-summary(models)
+
+# Create four plots within a 2x2 frame to compare the different criteria
+par(mfrow =c(2,2))
+  # SSE
+  plot(models.sum$rss, xlab ="Number of predictors", ylab ="SSE", type ="l")
+  
+  # R2
+  plot(models.sum$adjr2, xlab ="Number of predictors", ylab ="Adjusted RSq", type ="l")
+  
+  # Mallow's Cp
+  plot(models.sum$cp, xlab ="Number of predictors", ylab ="Cp", type ="l")
+  
+  # BIC
+  plot(models.sum$bic, xlab ="Number of predictors", ylab ="BIC", type ="l")
+```
+
+It seems that 10 predictors is the best number of predictors for the linear regression with interaction terms.
