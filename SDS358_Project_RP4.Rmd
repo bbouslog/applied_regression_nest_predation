@@ -1,0 +1,144 @@
+---
+title: "SDS358_Project_RP4"
+author: "Brent Bouslog"
+date: "12/6/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(car)
+library(psych)
+library(leaps)
+knitr::opts_chunk$set(echo = TRUE)
+require("knitr")
+opts_knit$set(root.dir = "~/RStudio")
+```
+
+## Importing Data
+
+```{r show_orig, layout="l-body-outset"}
+mydata <- read.csv("nest_predation_dataset.csv")
+```
+
+## Data Preprocessing
+
+```{r show, layout="l-body-outset"}
+data <- mydata[c("Lat","Long","IncubationPeriod.days.", "NestlingPeriod.days.", "ClutchSize", "demelevation", "temptrop2", "PercentageSuccessfulNests")]
+data <- drop_na(data)
+kable(head(data))
+```
+
+## Best Subsets Regression: Multiple Linear Regression with Interaction Terms
+
+```{r dummy}
+data$ntemp <-ifelse(data$temptrop2 == 'ntemp', 1, 0)
+data$stemp <-ifelse(data$temptrop2 == 'stemp', 1, 0)
+```
+
+```{r mlr_interaction}
+# Calculate the squared predictor variables to include in the model and the interaction term:
+data <-data %>% mutate(Lat.ntemp = Lat*ntemp, Lat.stemp = Lat*stemp, Long.ntemp = Long*ntemp, Long.stemp = Long*stemp,
+                       Incubate.ntemp = IncubationPeriod.days.*ntemp, Incubate.stemp = IncubationPeriod.days.*stemp, 
+                       Nestle.ntemp = NestlingPeriod.days.*ntemp, Nestle.stemp = NestlingPeriod.days.*stemp,
+                       ClutchSize.ntemp = ClutchSize*ntemp, ClutchSize.stemp = ClutchSize*stemp, 
+                       Elev.ntemp = demelevation*ntemp, Elev.stemp = demelevation*stemp)
+```
+
+```{r best_subsets2}
+# Find the best model for each number of predictors (with 8 predictors maximum)
+models <-regsubsets(PercentageSuccessfulNests ~Lat +Lat.ntemp +Lat.stemp +Long +Long.ntemp +Long.stemp +IncubationPeriod.days. +Incubate.ntemp +Incubate.stemp +NestlingPeriod.days. +Nestle.ntemp +Nestle.stemp +ClutchSize +ClutchSize.ntemp +ClutchSize.stemp +demelevation +Elev.ntemp +Elev.stemp +ntemp +stemp, data, nvmax =20)
+models.sum <-summary(models)
+
+# Create four plots within a 2x2 frame to compare the different criteria
+par(mfrow =c(2,2))
+  # SSE
+  plot(models.sum$rss, xlab ="Number of predictors", ylab ="SSE", type ="l")
+  
+  # R2
+  plot(models.sum$adjr2, xlab ="Number of predictors", ylab ="Adjusted RSq", type ="l")
+  
+  # Mallow's Cp
+  plot(models.sum$cp, xlab ="Number of predictors", ylab ="Cp", type ="l")
+  
+  # BIC
+  plot(models.sum$bic, xlab ="Number of predictors", ylab ="BIC", type ="l")
+```
+
+It looks like 10 is the optimal number of predictors
+
+```{r subr_model_selection}
+# Display the best model (selected predictors are indicated by *) for each number of predictors
+models.sum$outmat
+```
+
+Including best 10 predictors, but maintaining hierarchy principle as well.
+
+```{r subr_model}
+# Creating a model with the 6 predictors indicated as the best by the Best Subsets Regression
+reg_sub <-lm(PercentageSuccessfulNests ~Lat +Lat.ntemp +Long +Long.stemp +IncubationPeriod.days. +NestlingPeriod.days. +Nestle.ntemp +Nestle.stemp +ClutchSize +ClutchSize.stemp +demelevation +Elev.stemp +ntemp +stemp, data)
+
+summary(reg_sub)
+```
+
+```{r diag}
+# Fit the model obtained from forward selection
+data$resids <-residuals(reg_sub)
+data$predicted <-predict(reg_sub)
+
+ggplot(data, aes(x=predicted, y=resids)) +
+  geom_point() +
+  geom_hline(yintercept=0, color ="blue") +
+  labs(title ="Residuals versus Fitted values for Best Subsets Regression", x ="Fitted values", y ="Residuals")
+
+ggplot(data, aes(sample = resids)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title ="Normal probability plot for Best Subsets Regression", x ="Theoretical percentiles", y ="Sample percentiles")
+```
+
+```{r mlr_anova}
+# ANOVA Table
+anova(reg_sub)
+```
+
+```{r cook}
+# Identifying outliers with Cook's distance
+plot(reg_sub, which=4, cook.levels=cutoff)
+```
+
+```{r out}
+# If you identify an outlier, remove it by indexing the corresponding row
+data_no_out <- data[-116,]
+data_no_out <- data_no_out[-127,]
+data_no_out <- data_no_out[-337,]
+```
+
+```{r mlr5}
+# Fit the regression model
+reg_sub2 <-lm(PercentageSuccessfulNests ~Lat +Lat.ntemp +Long +Long.stemp +IncubationPeriod.days. +NestlingPeriod.days. +Nestle.ntemp +Nestle.stemp +ClutchSize +ClutchSize.stemp +demelevation +Elev.stemp +ntemp +stemp, data_no_out)
+
+# Display the summary table for the regression model 
+summary(reg_sub2)
+```
+
+```{r diag2}
+# Fit the model obtained from forward selection
+data_no_out$resids <-residuals(reg_sub2)
+data_no_out$predicted <-predict(reg_sub2)
+
+ggplot(data_no_out, aes(x=predicted, y=resids)) +
+  geom_point() +
+  geom_hline(yintercept=0, color ="blue") +
+  labs(title ="Residuals versus Fitted values for Best Subsets Regression Without Outliers", x ="Fitted values", y ="Residuals")
+
+ggplot(data_no_out, aes(sample = resids)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title ="Normal probability plot for Best Subsets Regression Without Outliers", x ="Theoretical percentiles", y ="Sample percentiles")
+```
+
+```{r mlr_anova2}
+# ANOVA Table
+anova(reg_sub2)
+```
